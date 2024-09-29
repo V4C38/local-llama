@@ -1,0 +1,47 @@
+#!/bin/bash
+
+# ------------------------------------------------------------------------------------------------------
+# Configuration
+# ------------------------------------------------------------------------------------------------------
+MODEL_PATH="" # add path
+LLAMA_EXECUTABLE="" # add path
+
+CONTEXT_SIZE=4096      # Reasonable default context size
+PREDICT_TOKENS=128     # Limit the number of tokens in non-interactive mode
+
+CUSTOM_INSTRUCTION="You are LLama 3.2 run locally - Please respond clearly and concisely."
+# ------------------------------------------------------------------------------------------------------
+
+PROMPT=""
+INTERACTIVE_MODE=""
+CONVERSATION_FLAG=""
+
+# Parse arguments
+for arg in "$@"; do
+  if [[ "$arg" == "-interactive" || "$arg" == "-i" ]]; then
+    INTERACTIVE_MODE="--interactive"
+    CONVERSATION_FLAG="-cnv"
+  else
+    PROMPT="$PROMPT $arg"
+  fi
+done
+
+PROMPT=$(echo "$PROMPT" | xargs)
+
+if [[ -n "$INTERACTIVE_MODE" ]]; then
+  # Interactive mode: use conversation prompt template
+  PROMPT_TEMPLATE="[INST] <<SYS>>\n{{custom_instruction}}\n<</SYS>>\n\n{{prompt}}\n[/INST]"
+else
+  # Non-interactive mode: include custom instruction
+  PROMPT_TEMPLATE="{{custom_instruction}}\n\n{{prompt}}"
+fi
+
+FORMATTED_PROMPT=$(echo "$PROMPT_TEMPLATE" | sed "s|{{custom_instruction}}|$CUSTOM_INSTRUCTION|g" | sed "s|{{prompt}}|$PROMPT|g")
+
+if [[ -n "$INTERACTIVE_MODE" ]]; then
+  # Interactive mode: prompt user for input after initial invocation
+  "$LLAMA_EXECUTABLE" -m "$MODEL_PATH" -c "$CONTEXT_SIZE" --no-warmup $INTERACTIVE_MODE $CONVERSATION_FLAG
+else
+  # Non-interactive mode: process the single prompt and limit the number of predicted tokens
+  "$LLAMA_EXECUTABLE" -m "$MODEL_PATH" -c "$CONTEXT_SIZE" --no-warmup -p "$FORMATTED_PROMPT" -n "$PREDICT_TOKENS"
+fi
